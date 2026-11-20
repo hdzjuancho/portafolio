@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitácora - Juancho Hernandez</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <section class="obras-section">
+        <!-- Encabezado consistente con el resto del portafolio -->
+        <header class="obras-header">
+            <h2><a href="index.html" class="logo-link">JUANCHO HERNANDEZ</a></h2>
+            <nav class="nav-links">
+                <a href="index.html#obras">Obras</a>
+                <a href="bitacora.html" class="active">Bitácora</a>
+                <a href="bio.html">Bio</a>
+                <a href="index.html#modelos-3d">3D</a>
+                <a href="contacto.html">Contacto</a>
+            </nav>
+        </header>
+
+        <!-- Contenedor editorial para las entradas -->
+        <main class="bitacora-container" id="bitacora-feed"></main>
+    </section>
+
+    <script>
+      /* 
+          --- CONFIGURACIÓN DE ENTRADAS ---
+          - archivoTexto: Ruta al archivo .txt con el título y párrafos.
+          - carpetaImagenes: Carpeta dentro de "img/bitacora/".
+          - totalImagenes: Cantidad total de imágenes numeradas.
+          - pdf: (Opcional) Ruta al archivo PDF si quieres adjuntar uno a esta entrada.
+        */
+        const entradasBitacora = [
+            {
+                archivoTexto: "content/bitacora/entrada1.txt",
+                carpetaImagenes: "1",
+                totalImagenes: 10,
+                pdf: "" // <- Aquí añades tu PDF si lo deseas
+            },
+            {
+                archivoTexto: "content/bitacora/entrada2.txt",
+                carpetaImagenes: "2",
+                totalImagenes: 6,
+                pdf: "content/bitacora/haterdetodo.pdf" // Si no lleva PDF, déjalo vacío o bórralo
+            },
+            
+            {
+                archivoTexto: "content/bitacora/entrada3.txt",
+                carpetaImagenes: "3",
+                totalImagenes: 8,
+                pdf: "" // Si no lleva PDF, déjalo vacío o bórralo
+            }
+        ];
+        const feed = document.getElementById('bitacora-feed');
+
+        // Función para cargar las entradas de la más reciente a la más antigua
+        async function cargarBitacora() {
+            const entradasOrdenadas = [...entradasBitacora].reverse();
+
+            for (let indexPost = 0; indexPost < entradasOrdenadas.length; indexPost++) {
+                const entrada = entradasOrdenadas[indexPost];
+                const article = document.createElement('article');
+                article.className = 'bitacora-post';
+
+                let tituloEntrada = "Sin título";
+                let parrafosHTML = "<p>Cargando contenido...</p>";
+
+                // 1. Leer el archivo de texto externo (.txt)
+                try {
+                    const response = await fetch(entrada.archivoTexto);
+                    if (response.ok) {
+                        const textoPlano = await response.text();
+                        
+                        const bloques = textoPlano
+                            .split(/\r?\n\r?\n/)
+                            .map(b => b.trim())
+                            .filter(b => b !== "");
+
+                        if (bloques.length > 0) {
+                            tituloEntrada = bloques[0];
+                            parrafosHTML = bloques.slice(1)
+                                .map(p => `<p>${p}</p>`)
+                                .join('');
+                        }
+                    } else {
+                        parrafosHTML = "<p>No se pudo cargar el contenido de esta entrada.</p>";
+                    }
+                } catch (error) {
+                    console.error("Error al leer el archivo de texto:", error);
+                }
+
+                // 2. Generar enlace del PDF si existe
+                let pdfHTML = '';
+                if (entrada.pdf && entrada.pdf.trim() !== "") {
+                    pdfHTML = `
+                        <div class="post-pdf-link">
+                            <a href="${entrada.pdf}" target="_blank" rel="noopener noreferrer">
+                                <span>Descargar / Ver PDF adjunto</span>
+                            </a>
+                        </div>
+                    `;
+                }
+
+                // 3. Generar el contenedor multimedia automáticamente por cantidad y carpeta
+                let multimediaHTML = '';
+                if (entrada.carpetaImagenes && entrada.totalImagenes > 0) {
+                    multimediaHTML = `<div class="post-media-interactive" id="media-box-${indexPost}">`;
+                    
+                    for (let i = 1; i <= entrada.totalImagenes; i++) {
+                        // Por defecto busca .webp, pero puedes usar GIFs simplemente nombrando tu archivo .gif en la carpeta
+                        const archivoSrc = `img/bitacora/${entrada.carpetaImagenes}/${i}.webp`;
+                        
+                        const isLeft = (i % 2 !== 0);
+                        const posX = isLeft ? 10 + ((i * 30) % 150) : window.innerWidth - 340 - ((i * 30) % 150);
+                        const posY = 10 + (Math.floor((i - 1) / 2) * 130);
+                        
+                        multimediaHTML += `
+                            <div class="draggable-img-wrapper" style="left: ${posX}px; top: ${posY}px;" data-id="img-${indexPost}-${i}">
+                                <img src="${archivoSrc}" alt="${tituloEntrada} ${i}" draggable="false" onload="detectarOrientacion(this)" onerror="intentarGif(this, '${entrada.carpetaImagenes}', ${i})">
+                            </div>
+                        `;
+                    }
+                    multimediaHTML += `</div>`;
+                }
+
+                // 4. Montar la estructura final
+                article.innerHTML = `
+                    <div class="post-meta">
+                        <time>${entrada.fecha || ""}</time>
+                    </div>
+                    ${multimediaHTML}
+                    <div class="post-text-side">
+                        <h3 class="post-title">${tituloEntrada}</h3>
+                        <div class="post-content">
+                            ${parrafosHTML}
+                        </div>
+                        ${pdfHTML}
+                    </div>
+                `;
+
+                feed.appendChild(article);
+            }
+        }
+
+        // Función inteligente: si el archivo no es .webp (por ejemplo, si es un .gif en la misma ruta numérica), lo carga automáticamente
+        window.intentarGif = function(imgElement, carpeta, numero) {
+            if (!imgElement.dataset.intentado) {
+                imgElement.dataset.intentado = "true";
+                imgElement.src = `img/bitacora/${carpeta}/${numero}.gif`;
+            }
+        }
+
+        // Función para detectar si la imagen/gif es horizontal o vertical al cargar
+        window.detectarOrientacion = function(imgElement) {
+            const wrapper = imgElement.closest('.draggable-img-wrapper');
+            if (!wrapper) return;
+
+            if (imgElement.naturalWidth > imgElement.naturalHeight) {
+                wrapper.classList.add('img-horizontal');
+            } else {
+                wrapper.classList.add('img-vertical');
+            }
+        }
+
+        // Ejecutar la carga al iniciar la página
+        cargarBitacora();
+
+        // --- SCRIPT DE INTERACCIÓN: ARRASTRAR CON EL MOUSE (Drag & Drop) ---
+        document.addEventListener('DOMContentLoaded', () => {
+            let activeWrapper = null;
+            let startX = 0;
+            let startY = 0;
+            let initialX = 0;
+            let initialY = 0;
+
+            document.addEventListener('mousedown', (e) => {
+                const wrapper = e.target.closest('.draggable-img-wrapper');
+                if (!wrapper) return;
+
+                activeWrapper = wrapper;
+
+                startX = e.clientX;
+                startY = e.clientY;
+                
+                initialX = wrapper.offsetLeft;
+                initialY = wrapper.offsetTop;
+
+                activeWrapper.classList.add('dragging');
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!activeWrapper) return;
+
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+
+                activeWrapper.style.left = `${initialX + dx}px`;
+                activeWrapper.style.top = `${initialY + dy}px`;
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (activeWrapper) {
+                    activeWrapper.classList.remove('dragging');
+                    activeWrapper = null;
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
